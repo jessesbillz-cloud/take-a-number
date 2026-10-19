@@ -121,6 +121,8 @@ body.proj .top{display:none}
 .padresult.warn{background:#f3c14b1a;border:2px solid var(--wait);color:#ffe7a8}
 .padresult .checkin{border:0;border-radius:12px;padding:18px;font-size:22px;font-weight:800;background:var(--go);color:#062414}
 .give{grid-column:1/-1;padding:20px;font-size:20px;display:flex;flex-direction:column;align-items:center;gap:2px}
+.walkin{padding:16px;font-size:18px;display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--go);color:#062414}
+.walkin span{font-size:13px;font-weight:600;opacity:.8}
 .give span{font-size:14px;font-weight:600;opacity:.85}
 
 /* attendee */
@@ -290,8 +292,9 @@ body.proj .top{display:none}
           <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
           <button data-k="clr" class="soft">Clear</button><button data-k="0">0</button><button data-k="del" class="soft" aria-label="Delete">⌫</button>
         </div>
+        <button class="btn walkin" id="walkin">Check in a walk-up <span>already in line with no number</span></button>
       </div>
-      <button class="btn give" id="give">Give a number <span>for someone without a phone</span></button>
+      <button class="btn give" id="give">Give a number for later <span>for someone without a phone</span></button>
     </div>
   </section>
 
@@ -450,8 +453,8 @@ function passStatus(p, a, done){
   if (a.used && a.used[p.number]) return {k:"done", pill:"Checked in", sub:`Checked in at the line at ${new Date(a.used[p.number]).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"})}.`};
   if (a.status==="open") return {k:"open", pill:"Open", sub:"Walk up anytime. No number needed right now."};
   if (a.status==="break") return {k:"break", pill:"Break", sub:"Author is on break. Your number holds."};
-  if (p.number < a.from) return {k:"missed", pill:"Called", sub:`Range is ${a.from}–${a.to}. Your number went by. Check with the table.`};
-  if (p.number <= a.to) return {k:"go", pill:"Go now", sub:`Range ${a.from}–${a.to}. Head to the line.`};
+  // A number that has been called never expires: come line up any time after it's called.
+  if (p.number <= a.to) return {k:"go", pill:"Go now", sub:`Your number has been called. Line up any time, you never lose your place.`};
   const away = p.number - a.to;
   return {k:"wait", pill:`${away} away`, sub:`Calling through ${a.to}. You're ${away} number${away===1?"":"s"} out.`};
 }
@@ -689,6 +692,20 @@ $("padResult").addEventListener("click", e => {
 });
 
 /* give a number to someone without a phone */
+/* walk-up at opening: someone already standing in line with no number. Hand out the next number and check it in in one tap. */
+$("walkin").onclick = async () => {
+  const a = S.authors[deskAuthor]; if (!a) return;
+  if (a.status === "break"){ toast("You're on break. Switch to Range or Open first.", true); return; }
+  $("walkin").disabled = true;
+  try{
+    const id = await addPass(deskAuthor, "Walk-up · checked in at the table");
+    const n = S.passes[id].number;
+    await patchAuthor(deskAuthor, {used: {[n]: Date.now()}});
+    toast(`Walk-up checked in as #${n}.`);
+  }catch(e){ toast("Couldn't check them in just now. Try again.", true); }
+  $("walkin").disabled = false;
+};
+
 $("give").onclick = async () => {
   const a = S.authors[deskAuthor]; if (!a) return;
   $("give").disabled = true;
