@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#141015">
+<style>:root{color-scheme:dark;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Take a Number</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: signage board on a warm black floor. Tabs swap between Board (projector), Table (staff phone), My Bands (attendee phone). */
+:root{
+  --ink:#141015; --panel:#1f1a21; --panel-2:#2a232c; --line:#3a313d;
+  --fg:#f6eef3; --muted:#b4a6b0; --pink:#ff2e8b; --pink-soft:#ff2e8b26;
+  --go:#38d98a; --go-soft:#38d98a22; --wait:#f3c14b; --break:#8e8592;
+  --display:"Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --body:"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{background:var(--ink);color:var(--fg)}
+body{font-family:var(--body);font-size:15px;line-height:1.45;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 40px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--ink)}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--pink);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+
+/* top bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--ink);display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding-block:8px}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand b{font-family:var(--display);font-weight:900;font-size:30px;letter-spacing:.02em;text-transform:uppercase}
+.brand b span{color:var(--pink)}
+.mode{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.mode i{width:8px;height:8px;border-radius:50%;background:var(--wait);display:inline-block}
+.mode.live i{background:var(--go);box-shadow:0 0 0 4px var(--go-soft)}
+.tabs{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px}
+.tabs button{border:0;background:none;padding:8px 14px;border-radius:999px;font-weight:600;font-size:14px;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--pink);color:#fff}
+
+/* board */
+.marquee{position:relative;border:2px solid var(--pink);border-radius:14px;padding:16px 18px;background:
+  radial-gradient(circle,var(--fg) 1.6px,transparent 2.4px) 0 0/18px 18px repeat-x,
+  radial-gradient(circle,var(--fg) 1.6px,transparent 2.4px) 9px 100%/18px 18px repeat-x,var(--panel);
+  display:flex;flex-wrap:wrap;justify-content:space-between;align-items:end;gap:8px 20px}
+.marquee h1{margin:0;font-family:var(--display);font-weight:900;text-transform:uppercase;font-size:clamp(26px,4.2vw,54px);line-height:.9;letter-spacing:.01em;text-wrap:balance}
+.marquee h1 em{font-style:normal;color:var(--pink)}
+.marquee p{margin:0;color:var(--muted);font-size:14px}
+.marquee .stamp{font-variant-numeric:tabular-nums}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+/* one-screen board: column-major grid like the projector sheet, sized by script to fit the window */
+body.boardmode{padding-block:8px 8px;overflow:hidden;height:100%}
+body.boardmode .wrap{max-width:none}
+body.proj .top{display:none}
+#v-board{gap:10px}
+.board{--cols:3;--rows:7;--fs:22px;display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));grid-template-rows:repeat(var(--rows),minmax(0,1fr));grid-auto-flow:column;column-gap:clamp(10px,2vw,28px);height:var(--bh,auto);border-top:1px solid var(--line)}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:clamp(6px,1vw,14px);padding:0 4px;border-bottom:1px solid var(--line);min-height:0}
+.row .nm{font-family:var(--display);font-weight:800;font-size:var(--fs);line-height:1;text-transform:uppercase;letter-spacing:.02em;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{font-family:var(--display);font-weight:800;font-size:var(--fs);line-height:1.1;letter-spacing:.03em;padding:.12em .45em;border-radius:.3em;font-variant-numeric:tabular-nums;white-space:nowrap;text-align:center;min-width:4.6em}
+.projbtn{border:1px solid var(--line);background:var(--panel-2);border-radius:8px;padding:6px 10px;font-size:13px;font-weight:600;color:var(--muted)}
+.chip.bands{background:var(--go-soft);color:var(--go)}
+.chip.open{background:var(--pink-soft);color:var(--pink)}
+.chip.break{background:var(--panel-2);color:var(--break)}
+.row.flash{animation:flash 1.6s ease-out}
+@keyframes flash{0%{background:var(--pink-soft)}100%{background:transparent}}
+
+/* shared cards / forms */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.panel h2{margin:0;font-family:var(--display);font-weight:800;font-size:26px;text-transform:uppercase;letter-spacing:.02em}
+.hint{margin:0;color:var(--muted);font-size:13px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.field input,.field select{background:var(--ink);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:16px;width:100%}
+.inline{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+.inline .field{flex:1 1 160px}
+.btn{border:0;border-radius:10px;padding:12px 16px;font-weight:700;font-size:15px;background:var(--pink);color:#fff}
+.btn.ghost{background:var(--panel-2);color:var(--fg);border:1px solid var(--line)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px;align-items:start}
+.err{color:#ff8fa3;font-size:13px;margin:0}
+
+/* table (staff) */
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.seg button{border:1px solid var(--line);background:var(--ink);border-radius:10px;padding:14px 6px;font-weight:700;font-size:15px}
+.seg button[aria-pressed="true"].b-bands{background:var(--go);border-color:var(--go);color:#062414}
+.seg button[aria-pressed="true"].b-open{background:var(--pink);border-color:var(--pink);color:#fff}
+.seg button[aria-pressed="true"].b-break{background:var(--break);border-color:var(--break);color:#141015}
+.range{display:flex;align-items:baseline;justify-content:center;gap:12px;font-family:var(--display);font-weight:900;font-size:clamp(56px,16vw,92px);line-height:1;font-variant-numeric:tabular-nums}
+.range small{font-size:.45em;color:var(--muted);font-weight:800}
+.stepper{display:grid;grid-template-columns:auto repeat(4,1fr);gap:6px;align-items:center}
+.stepper span{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding-right:6px}
+.stepper button{border:1px solid var(--line);background:var(--panel-2);border-radius:10px;padding:12px 4px;font-weight:700;font-size:16px;font-variant-numeric:tabular-nums}
+.stepper button.up{background:var(--go-soft);border-color:#38d98a55;color:var(--go)}
+.stats{display:flex;gap:18px;flex-wrap:wrap;color:var(--muted);font-size:13px}
+.stats b{color:var(--fg);font-variant-numeric:tabular-nums;font-size:16px}
+.cap{margin:0;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.rangebox{display:flex;flex-direction:column;gap:10px}
+.bumps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.bumps button{border:0;border-radius:14px;padding:22px 4px;font-family:var(--display);font-weight:900;font-size:38px;line-height:1;background:var(--go);color:#062414}
+.bumps button:active{transform:scale(.97)}
+.undo{align-self:center;border:1px solid var(--line);background:none;border-radius:999px;padding:8px 18px;font-weight:600;color:var(--muted)}
+.padread{font-family:var(--display);font-weight:900;font-size:56px;line-height:1;text-align:center;padding:10px;border-radius:12px;background:var(--ink);border:1px solid var(--line);font-variant-numeric:tabular-nums;min-height:78px;display:flex;align-items:center;justify-content:center}
+.padread.empty{font-family:var(--body);font-weight:600;font-size:17px;color:var(--muted)}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pad button{border:1px solid var(--line);background:var(--panel-2);border-radius:12px;padding:16px 0;font-family:var(--display);font-weight:800;font-size:32px;line-height:1;font-variant-numeric:tabular-nums}
+.pad button.soft{font-family:var(--body);font-size:16px;font-weight:700;color:var(--muted)}
+.padresult{border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;text-align:center}
+.padresult b{font-size:20px}
+.padresult span{font-size:15px}
+.padresult.ok{background:var(--go-soft);border:2px solid var(--go)}
+.padresult.bad{background:#ff8fa31f;border:2px solid #ff8fa3;color:#ffd0d9}
+.padresult.warn{background:#f3c14b1a;border:2px solid var(--wait);color:#ffe7a8}
+.padresult .checkin{border:0;border-radius:12px;padding:18px;font-size:22px;font-weight:800;background:var(--go);color:#062414}
+.give{grid-column:1/-1;padding:20px;font-size:20px;display:flex;flex-direction:column;align-items:center;gap:2px}
+.give span{font-size:14px;font-weight:600;opacity:.85}
+
+/* attendee */
+.passes{display:flex;flex-direction:column;gap:10px}
+.pass{display:grid;grid-template-columns:84px 1fr auto;gap:12px;align-items:center;background:var(--panel);border:1px solid var(--line);border-left:6px solid var(--line);border-radius:12px;padding:12px}
+.pass .num{font-family:var(--display);font-weight:900;font-size:40px;line-height:1;text-align:center;font-variant-numeric:tabular-nums}
+.pass .num small{display:block;font-size:11px;font-family:var(--body);font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.pass .who{min-width:0}
+.pass .who b{display:block;font-family:var(--display);font-weight:800;font-size:22px;text-transform:uppercase;letter-spacing:.02em;line-height:1.05;overflow-wrap:anywhere}
+.pass .who span{font-size:13px;color:var(--muted)}
+.pill{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:5px 9px;border-radius:999px;white-space:nowrap}
+.pass.go{border-left-color:var(--go)} .pass.go .pill{background:var(--go);color:#062414}
+.pass.open{border-left-color:var(--pink)} .pass.open .pill{background:var(--pink);color:#fff}
+.pass.wait{border-left-color:var(--wait)} .pass.wait .pill{background:#f3c14b26;color:var(--wait)}
+.pass.break .pill{background:var(--panel-2);color:var(--break)}
+.pass.missed{border-left-color:#ff8fa3} .pass.missed .pill{background:#ff8fa326;color:#ff8fa3}
+.pass.done{opacity:.5} .pass.done .pill{background:var(--panel-2);color:var(--muted)}
+.pass .act{grid-column:1/-1;display:flex;gap:8px;justify-content:flex-end}
+.pass .act button{border:1px solid var(--line);background:var(--panel-2);border-radius:8px;padding:6px 10px;font-size:13px;font-weight:600}
+.empty{border:1px dashed var(--line);border-radius:12px;padding:18px;color:var(--muted);text-align:center}
+.steps{margin:0;padding-left:20px;color:var(--muted);font-size:13px;display:flex;flex-direction:column;gap:2px}
+.steps b{color:var(--fg)}
+
+/* plan states (attendee's own checklist) */
+.planseg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.planseg button{border:1px solid var(--line);background:var(--ink);border-radius:8px;padding:7px 2px;font-size:12px;font-weight:700;color:var(--muted)}
+.planseg button[aria-pressed="true"][data-p="preorder"]{background:var(--pink);border-color:var(--pink);color:#fff}
+.planseg button[aria-pressed="true"][data-p="want"]{background:var(--wait);border-color:var(--wait);color:#241a02}
+.planseg button[aria-pressed="true"][data-p="seen"]{background:var(--go);border-color:var(--go);color:#062414}
+.planseg button[aria-pressed="true"][data-p="skip"]{background:var(--panel-2);border-color:var(--break);color:var(--fg)}
+.filters{display:flex;flex-wrap:wrap;gap:6px}
+.filters button{border:1px solid var(--line);background:var(--ink);border-radius:999px;padding:6px 11px;font-size:13px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+.filters button[aria-pressed="true"]{background:var(--fg);color:var(--ink);border-color:var(--fg)}
+.alist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.alist li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;align-items:center;padding:10px 2px;border-bottom:1px solid var(--line)}
+.alist .an{min-width:0}
+.alist .an b{display:block;font-family:var(--display);font-weight:800;font-size:20px;text-transform:uppercase;letter-spacing:.02em;line-height:1.05}
+.alist .an span{font-size:12px;color:var(--muted)}
+.alist .planseg{grid-column:1/-1}
+.linkbtn{border:0;background:none;color:var(--pink);font-weight:700;font-size:13px;padding:4px 0}
+.mini{font-family:var(--display);font-weight:800;font-size:16px;padding:1px 8px;border-radius:6px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.mini.bands{background:var(--go-soft);color:var(--go)} .mini.open{background:var(--pink-soft);color:var(--pink)} .mini.break{background:var(--panel-2);color:var(--break)}
+
+/* floor map */
+.floor{position:relative;width:100%;aspect-ratio:10/8;max-width:100%;background:
+  repeating-linear-gradient(45deg,transparent 0 14px,#ffffff06 14px 15px),var(--panel);border:2px solid var(--line);border-radius:14px;overflow:hidden}
+.booth{position:absolute;border:2px solid var(--line);background:var(--panel-2);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:2px;text-align:center;min-width:0}
+.booth b{font-family:var(--display);font-weight:800;font-size:clamp(10px,1.9vw,17px);line-height:1;text-transform:uppercase;letter-spacing:.02em;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.booth small{font-size:clamp(8px,1.2vw,11px);color:var(--muted);font-variant-numeric:tabular-nums}
+.booth i{position:absolute;top:4px;right:4px;width:8px;height:8px;border-radius:50%}
+.booth i.bands{background:var(--go)} .booth i.open{background:var(--pink)} .booth i.break{background:var(--break)}
+.booth.po{border:3px solid var(--pink)}
+.booth.po::after{content:"";position:absolute;top:0;left:0;border-top:12px solid var(--pink);border-right:12px solid transparent;border-top-left-radius:4px}
+.booth.p-want b{color:var(--wait)}
+.booth.p-seen{opacity:.5}
+.booth.p-skip{border-style:dashed;opacity:.35}
+/* number pill inside a table: green = line up now, dark = holding, red = number passed, gray check = checked in */
+.booth .bp{font-style:normal;font-family:var(--display);font-weight:900;font-size:clamp(11px,2.1vw,18px);line-height:1;padding:.14em .45em;border-radius:999px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.bp-go{background:var(--go);color:#062414}
+.bp-wait{background:var(--ink);color:var(--fg);box-shadow:inset 0 0 0 1.5px var(--fg)}
+.bp-break{background:var(--ink);color:var(--break);box-shadow:inset 0 0 0 1.5px var(--break)}
+.bp-missed{background:#ff8fa3;color:#2a0710}
+.bp-done{background:var(--panel-2);color:var(--muted);font-weight:800}
+.booth.ready{opacity:1;animation:ready 1.8s ease-in-out infinite}
+@keyframes ready{0%,100%{box-shadow:0 0 0 0 #38d98aaa}50%{box-shadow:0 0 0 8px #38d98a00}}
+.booth.sel{outline:3px solid var(--fg);outline-offset:2px;opacity:1}
+.mapsum{margin:0;font-size:16px;color:var(--muted)}
+.mapsum b{color:var(--fg);font-variant-numeric:tabular-nums}
+.mapsum b.go{color:var(--go)}
+.myband{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;border-radius:12px;padding:12px;background:var(--panel-2);border:2px solid var(--line);font-size:14px;color:var(--muted)}
+.myband b{color:var(--fg);font-size:16px}
+.myband .n{font-family:var(--display);font-weight:900;font-size:44px;line-height:1;color:var(--fg);font-variant-numeric:tabular-nums}
+.myband.band-go{border-color:var(--go);background:var(--go-soft)} .myband.band-go .n,.myband.band-go b{color:var(--go)}
+.myband.band-wait{border-color:var(--wait)} .myband.band-wait .n{color:var(--wait)}
+.myband.band-open{border-color:var(--pink)} .myband.band-open .n{color:var(--pink)}
+.myband.band-missed{border-color:#ff8fa3}
+.myband.band-open{border-color:var(--go);background:var(--go-soft)} .myband.band-open .n,.myband.band-open b{color:var(--go)}
+.myband.band-wait{border-color:var(--fg)} .myband.band-wait .n{color:var(--fg)}
+@media (prefers-reduced-motion:reduce){.booth.ready{animation:none;box-shadow:0 0 0 3px var(--go)}}
+.landmark{position:absolute;font-size:clamp(9px,1.3vw,12px);font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:8px}
+.legend.small{font-size:12px}
+.sheet{display:flex;flex-direction:column;gap:10px}
+.sheet h3{margin:0;font-family:var(--display);font-weight:900;font-size:30px;text-transform:uppercase;letter-spacing:.02em;line-height:1}
+
+/* show-at-line overlay */
+.overlay{position:fixed;inset:0;z-index:20;background:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:calc(24px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.overlay .big{font-family:var(--display);font-weight:900;font-size:clamp(120px,40vw,220px);line-height:.85;color:var(--go);font-variant-numeric:tabular-nums}
+.overlay .a{font-family:var(--display);font-weight:800;font-size:32px;text-transform:uppercase}
+.overlay .n{font-size:22px;font-weight:600}
+.overlay .r{color:var(--muted)}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:30;background:var(--go);color:#062414;font-weight:700;padding:12px 16px;border-radius:12px;max-width:calc(100% - 32px);box-shadow:0 10px 30px #0008}
+@media (max-width:520px){
+  .brand b{font-size:26px}
+  .tabs{width:100%;justify-content:space-between}
+  .tabs button{flex:1;padding:9px 6px}
+  .pass{grid-template-columns:70px 1fr}
+  .pass .pill{grid-column:2;justify-self:start}
+}
+@media (prefers-reduced-motion:reduce){.row.flash{animation:none}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><b>Take a <span>Number</span></b><span class="mode" id="mode"><i></i><span id="modeText">Demo on this device</span></span></div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" id="t-board" data-v="board">Board</button>
+      <button role="tab" id="t-table" data-v="table">Table</button>
+      <button role="tab" id="t-me" data-v="me">My Bands</button>
+      <button role="tab" id="t-map" data-v="map">Map</button>
+    </nav>
+  </header>
+
+  <!-- BOARD -->
+  <section id="v-board" class="wrap">
+    <div class="marquee">
+      <div><h1>Signing <em>Lines</em></h1></div>
+      <p>Numbers shown can get in line now · <span class="stamp" id="stamp"></span> <button class="projbtn" id="proj">Projector view</button></p>
+    </div>
+    <div class="legend" id="legend">
+      <span><i class="dot" style="background:var(--go)"></i>Range: these numbers line up now</span>
+      <span><i class="dot" style="background:var(--pink)"></i>Open: walk up, no number needed</span>
+      <span><i class="dot" style="background:var(--break)"></i>Break</span>
+    </div>
+    <div class="board" id="board"></div>
+  </section>
+
+  <!-- TABLE -->
+  <section id="v-table" class="wrap" hidden>
+    <div class="panel" id="lock">
+      <h2>Author table</h2>
+      <p class="hint">Each table gets its own PIN. Staff update their own line from right here. Demo PIN: <b>2026</b></p>
+      <div class="inline">
+        <div class="field"><label for="lockAuthor">Author</label><select id="lockAuthor"></select></div>
+        <div class="field" style="flex:0 1 140px"><label for="lockPin">PIN</label><input id="lockPin" inputmode="numeric" maxlength="6" autocomplete="off"></div>
+        <button class="btn" id="unlock">Open table</button>
+      </div>
+      <p class="err" id="lockErr" hidden>That PIN doesn't match this table. Try 2026 for the demo.</p>
+    </div>
+    <div class="cols" id="desk" hidden>
+      <div class="panel">
+        <div class="inline" style="justify-content:space-between;align-items:center">
+          <h2 id="deskName"></h2>
+          <button class="btn ghost" id="switchAuthor">Switch table</button>
+        </div>
+        <div class="seg" role="group" aria-label="Line status">
+          <button class="b-bands" data-s="bands">Range</button>
+          <button class="b-open" data-s="open">Open</button>
+          <button class="b-break" data-s="break">Break</button>
+        </div>
+        <div id="rangeBox" class="rangebox">
+          <p class="cap">Now calling</p>
+          <div class="range"><span id="rFrom">1</span><small>to</small><span id="rTo">100</span></div>
+          <div class="bumps"><button data-bump="10">+10</button><button data-bump="20">+20</button><button data-bump="30">+30</button></div>
+          <button class="undo" id="undo" hidden>Undo</button>
+        </div>
+        <p class="cap" id="statusHint"></p>
+      </div>
+      <div class="panel" id="checkPanel">
+        <p class="cap">Check someone in · <span id="sChecked">0</span> so far</p>
+        <div class="padread" id="padRead">Type their number</div>
+        <div id="padResult" class="padresult" hidden></div>
+        <div class="pad">
+          <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+          <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+          <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+          <button data-k="clr" class="soft">Clear</button><button data-k="0">0</button><button data-k="del" class="soft" aria-label="Delete">⌫</button>
+        </div>
+      </div>
+      <button class="btn give" id="give">Give a number <span>for someone without a phone</span></button>
+    </div>
+  </section>
+
+  <!-- ATTENDEE -->
+  <section id="v-me" class="wrap" hidden>
+    <div class="cols">
+      <div class="panel">
+        <h2>Get a number</h2>
+        <p class="hint">At the event this opens from the QR code on each author's table. No wristband, no app.</p>
+        <div class="field"><label for="joinAuthor">Author</label><select id="joinAuthor"></select></div>
+        <div class="field"><label for="joinName">Your name</label><input id="joinName" autocomplete="given-name" placeholder="Janelle S."></div>
+        <button class="btn" id="join">Get my number</button>
+        <p class="err" id="joinErr" hidden></p>
+        <ol class="steps">
+          <li>Grab a number for an author whose board shows a range.</li>
+          <li>Open <b>Table</b>, unlock that author, and tap <b>+20</b>.</li>
+          <li>Come back here and watch your pass turn green.</li>
+        </ol>
+      </div>
+      <div class="panel">
+        <h2>My Bands</h2>
+        <div class="passes" id="passes"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="inline" style="justify-content:space-between;align-items:center">
+        <h2>My authors</h2>
+        <button class="linkbtn" data-goto="map">Open the map</button>
+      </div>
+      <p class="hint">Mark who you have a pre-order with, who you want to see, and who you're done with. It stays on this phone.</p>
+      <div class="filters" id="filters"></div>
+      <ul class="alist" id="alist"></ul>
+    </div>
+  </section>
+
+  <!-- MAP -->
+  <section id="v-map" class="wrap" hidden>
+    <div class="cols">
+      <div class="panel">
+        <div class="inline" style="justify-content:space-between;align-items:center"><h2>Floor map</h2><span class="hint">Sample layout</span></div>
+        <p class="mapsum" id="mapSum"></p>
+        <div class="floor" id="floor"></div>
+        <div class="legend small">
+          <span><b>Your number:</b></span>
+          <span><i class="dot" style="background:var(--go);border-radius:50%"></i>Line up now</span>
+          <span><i class="dot" style="box-shadow:inset 0 0 0 1.5px var(--fg);border-radius:50%"></i>Not yet</span>
+          <span>✓ Checked in</span>
+        </div>
+        <div class="legend small">
+          <span><b>Your plan:</b></span>
+          <span><i class="dot" style="border:2px solid var(--pink)"></i>Pre-order (pink border)</span>
+          <span style="color:var(--wait);font-weight:700">Want to see (yellow name)</span>
+          <span><i class="dot" style="background:var(--line)"></i>Done</span>
+          <span><i class="dot" style="border:1px dashed var(--break)"></i>Skip</span>
+        </div>
+      </div>
+      <div class="panel sheet" id="sheet"></div>
+    </div>
+  </section>
+</div>
+
+<div class="overlay" id="overlay" hidden>
+  <div class="a" id="oA"></div>
+  <div class="big" id="oN"></div>
+  <div class="n" id="oName"></div>
+  <div class="r" id="oR"></div>
+  <button class="btn ghost" id="oClose" style="margin-top:14px">Close</button>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+/* ---------- demo seed (used only when the page runs without the shared store) ---------- */
+const SEED = [
+ ["avina-st-graves","Avina St Graves","bands",1,220,318],["bb-easton","BB Easton","open",0,0,0],
+ ["cr-jane","C.R. Jane","bands",1,250,341],["geneva-monroe","Geneva Monroe","open",0,0,0],
+ ["jl-beck","JL Beck","open",0,0,0],["kate-oliver","Kate Oliver","open",0,0,0],
+ ["lauren-biel","Lauren Biel","break",1,180,226],["leigh-rivers","Leigh Rivers","bands",1,290,402],
+ ["luna-mason","Luna Mason","bands",1,140,205],["max-monroe","Max Monroe","break",1,120,190],
+ ["meagan-brandy","Meagan Brandy","open",0,0,0],["monica-james","Monica James","open",0,0,0],
+ ["penelope-black","Penelope Black","break",1,90,150],["samantha-barrett","Samantha Barrett","bands",1,100,171],
+ ["shantel-tessier","Shantel Tessier","bands",1,260,377],["steph-macca","Steph Macca","break",1,60,98],
+ ["sylvia-day","Sylvia Day","break",1,130,212],["tate-james","Tate James","open",0,0,0],
+ ["veronica-lancet","Veronica Lancet","open",0,0,0],["willow-winters","Willow Winters","open",0,0,0]
+];
+const DEMO_PIN = "2026";
+
+/* sample floor layout: wristband-line authors on the outer walls, walk-up tables in the middle */
+const LAYOUT = {};
+["avina-st-graves","cr-jane","leigh-rivers","shantel-tessier","sylvia-day"].forEach((id,i)=>LAYOUT[id]={b:"W"+(i+1),x:6+i*18,y:4,w:16,h:12});
+["lauren-biel","luna-mason","max-monroe"].forEach((id,i)=>LAYOUT[id]={b:"W"+(i+6),x:2,y:22+i*20,w:13,h:16});
+["penelope-black","samantha-barrett","steph-macca"].forEach((id,i)=>LAYOUT[id]={b:"W"+(i+9),x:85,y:22+i*20,w:13,h:16});
+["bb-easton","geneva-monroe","jl-beck","kate-oliver","meagan-brandy","monica-james","tate-james","veronica-lancet","willow-winters"]
+  .forEach((id,i)=>LAYOUT[id]={b:"T"+(i+1),x:22+(i%3)*19.5,y:26+Math.floor(i/3)*19,w:16,h:13});
+const PLAN = {preorder:"Pre-order", want:"Want to see", seen:"Done", skip:"Skip"};
+const shortName = n => { const p = n.split(" "); return p.length>1 ? p[0][0] + ". " + p[p.length-1] : n; };
+
+const S = { authors:{}, passes:{}, live:false };
+let db = null;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const store = { get(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }, set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} } };
+
+/* ---------- local demo state ---------- */
+function loadLocal(){
+  const saved = store.get("lp-state", null);
+  if (saved && saved.authors && Object.keys(saved.authors).length){ S.authors = saved.authors; S.passes = saved.passes || {}; return; }
+  S.authors = {}; SEED.forEach(([id,name,status,from,to,issued]) => S.authors[id] = {name,status,from,to,issued});
+  S.passes = {};
+}
+function saveLocal(){ if(!S.live) store.set("lp-state",{authors:S.authors,passes:S.passes}); }
+
+/* ---------- writes (shared store when live, this device otherwise) ---------- */
+/* Each table writes only its own author row. Check-ins send just the new number, so two check-ins never overwrite each other. */
+async function patchAuthor(id, patch){
+  const prev = S.authors[id]; if(!prev) return;
+  S.authors[id] = {...prev, ...patch, ...(patch.used ? {used: {...(prev.used||{}), ...patch.used}} : {})};
+  render();
+  if (S.live){ try{ await db.doc("authors/"+id).update(patch); }catch(e){ S.authors[id]=prev; render(); toast("Couldn't save. Only table staff with access can change this line.", true); } }
+  else saveLocal();
+}
+
+/* Numbers are handed out one at a time per author: take a short lock, read the latest count from the store, write count + 1.
+   Fifty people scanning the same QR in the same second each get their own number. */
+const TAB = "t" + Math.random().toString(36).slice(2, 10);
+const wait = ms => new Promise(r => setTimeout(r, ms));
+async function addPass(authorId, name){
+  const id = "p" + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+  if (!S.live){
+    const a = S.authors[authorId], number = (a.issued||0) + 1;
+    const body = { authorId, number, name, at: Date.now() };
+    S.authors[authorId] = {...a, issued: number}; S.passes[id] = body; saveLocal(); render();
+    return id;
+  }
+  const lock = db.doc("locks/" + authorId), row = db.doc("authors/" + authorId);
+  for (let i = 0; i < 30; i++){
+    let got = true;
+    try{ got = (await lock.acquire({holder: TAB, ttlMs: 2000})).acquired; }catch(e){ if (e && e.code === "invalid_argument") throw e; }
+    if (got){
+      const snap = await row.get();
+      const number = ((snap.exists && snap.data().issued) || 0) + 1;
+      await row.update({issued: number});
+      const body = { authorId, number, name, at: Date.now() };
+      await db.collection("passes").doc(id).set(body);
+      S.authors[authorId] = {...S.authors[authorId], issued: number}; S.passes[id] = body; render();
+      return id;
+    }
+    await wait(250 + Math.random() * 400);
+  }
+  throw new Error("busy");
+}
+
+/* ---------- status math ---------- */
+function passStatus(p, a, done){
+  if (!a) return {k:"break", pill:"Unknown", sub:"Author not found"};
+  if (done) return {k:"done", pill:"Done", sub:"Marked as signed"};
+  if (a.used && a.used[p.number]) return {k:"done", pill:"Checked in", sub:`Checked in at the line at ${new Date(a.used[p.number]).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"})}.`};
+  if (a.status==="open") return {k:"open", pill:"Open", sub:"Walk up anytime. No number needed right now."};
+  if (a.status==="break") return {k:"break", pill:"Break", sub:"Author is on break. Your number holds."};
+  if (p.number < a.from) return {k:"missed", pill:"Called", sub:`Range is ${a.from}–${a.to}. Your number went by. Check with the table.`};
+  if (p.number <= a.to) return {k:"go", pill:"Go now", sub:`Range ${a.from}–${a.to}. Head to the line.`};
+  const away = p.number - a.to;
+  return {k:"wait", pill:`${away} away`, sub:`Calling through ${a.to}. You're ${away} number${away===1?"":"s"} out.`};
+}
+const ORDER = {go:0, open:1, missed:2, wait:3, break:4, done:5};
+
+/* ---------- render ---------- */
+let view = "board", deskAuthor = null, lastBoard = {}, lastMine = {};
+const sortedIds = () => Object.keys(S.authors).sort((x,y)=>S.authors[x].name.localeCompare(S.authors[y].name));
+
+function render(){
+  // board
+  const rows = sortedIds().map(id => {
+    const a = S.authors[id];
+    const label = a.status==="bands" ? `${a.from} – ${a.to}` : a.status==="open" ? "OPEN" : "BREAK";
+    const changed = lastBoard[id] !== undefined && lastBoard[id] !== label;
+    lastBoard[id] = label;
+    return `<div class="row${changed?" flash":""}"><div class="nm">${esc(a.name)}</div><div class="chip ${a.status}">${label}</div></div>`;
+  }).join("");
+  $("board").innerHTML = rows || `<div class="empty">No authors loaded for this event yet.</div>`;
+  fitBoard();
+  $("stamp").textContent = "Updated " + new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit", second:"2-digit"});
+
+  // selects (keep selection)
+  const opts = sortedIds().map(id=>`<option value="${id}">${esc(S.authors[id].name)}</option>`).join("");
+  ["lockAuthor","joinAuthor"].forEach(sel => { const el=$(sel), v=el.value; if (el.dataset.sig!==opts){ el.innerHTML=opts; el.dataset.sig=opts; if(v) el.value=v; } });
+
+  // desk
+  if (deskAuthor && S.authors[deskAuthor]){
+    const a = S.authors[deskAuthor];
+    $("deskName").textContent = a.name;
+    document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.s===a.status)));
+    $("rangeBox").hidden = a.status!=="bands";
+    $("rFrom").textContent = a.from; $("rTo").textContent = a.to;
+    $("statusHint").textContent = a.status==="bands" ? `${a.issued||0} numbers handed out` : a.status==="open" ? "Anyone can walk up" : "Board shows BREAK";
+    $("undo").hidden = !undoState || undoState.id!==deskAuthor;
+    $("sChecked").textContent = Object.keys(a.used||{}).length;
+    renderPad();
+  }
+
+  // my passes
+  const mine = store.get("lp-mine", []), done = store.get("lp-done", {});
+  const list = mine.map(id => ({id, p:S.passes[id]})).filter(x=>x.p).map(x => ({...x, a:S.authors[x.p.authorId], st:passStatus(x.p, S.authors[x.p.authorId], done[x.id])}))
+    .sort((x,y)=> ORDER[x.st.k]-ORDER[y.st.k] || x.p.number-y.p.number);
+  $("passes").innerHTML = list.length ? list.map(({id,p,a,st}) => `
+    <div class="pass ${st.k}">
+      <div class="num"><small>No.</small>${p.number}</div>
+      <div class="who"><b>${esc(a?a.name:"Unknown")}</b><span>${esc(st.sub)}</span></div>
+      <div class="pill">${esc(st.pill)}</div>
+      <div class="act"><button data-find="${p.authorId}">Map</button><button data-show="${id}">Show at line</button><button data-done="${id}">${done[id]?"Undo":"Got it signed"}</button></div>
+    </div>`).join("")
+    : `<div class="empty">Your numbers show up here, all in one place, with each author's live range. No more digging through wristbands.</div>`;
+  list.forEach(({id,st,a,p}) => { if (lastMine[id] && lastMine[id]!=="go" && st.k==="go") toast(`You're up for ${a.name}. #${p.number} is in range, head to the line.`); lastMine[id]=st.k; });
+
+  renderAuthors(); renderMap();
+}
+
+/* ---------- my authors checklist ---------- */
+let filter = "all", selBooth = null;
+const lineLabel = a => a.status==="bands" ? `${a.from}–${a.to}` : a.status==="open" ? "Open" : "Break";
+const myPassFor = id => { const mine = store.get("lp-mine", []); return mine.map(k=>S.passes[k]).filter(p=>p && p.authorId===id).sort((x,y)=>x.number-y.number)[0]; };
+/* Plan per author: Pre-order is its own on/off. Want to see / Done / Skip is one choice. So "pre-order + want to see" works. */
+function getPlans(){
+  const raw = store.get("lp-plan", {}), out = {};
+  Object.entries(raw).forEach(([id, v]) => { out[id] = typeof v === "string" ? (v === "preorder" ? {pre:true} : {v}) : (v || {}); });
+  return out;
+}
+const isOn = (pl, k) => !!pl && (k === "preorder" ? !!pl.pre : pl.v === k);
+const planSeg = (id, pl) => `<div class="planseg" role="group" aria-label="My plan">${Object.entries(PLAN).map(([k,v])=>`<button data-plan="${k}" data-a="${id}" data-p="${k}" aria-pressed="${isOn(pl,k)}">${v}</button>`).join("")}</div>`;
+
+function renderAuthors(){
+  const plan = getPlans(), ids = sortedIds();
+  const count = k => ids.filter(id => isOn(plan[id], k)).length;
+  const fl = [["all","All",ids.length],["preorder","Pre-order",count("preorder")],["want","Want to see",count("want")],["seen","Done",count("seen")],["skip","Skip",count("skip")]];
+  $("filters").innerHTML = fl.map(([k,v,n])=>`<button data-filter="${k}" aria-pressed="${filter===k}">${v} ${n}</button>`).join("");
+  const shown = ids.filter(id => filter==="all" || isOn(plan[id], filter));
+  $("alist").innerHTML = shown.length ? shown.map(id => {
+    const a = S.authors[id], L = LAYOUT[id], p = myPassFor(id);
+    return `<li><div class="an"><b>${esc(a.name)}</b><span>${L?"Table "+L.b+" · ":""}${p?"You're #"+p.number+" · ":""}<button class="linkbtn" data-find="${id}">Find on map</button></span></div>
+      <span class="mini ${a.status}">${lineLabel(a)}</span>${planSeg(id, plan[id])}</li>`;
+  }).join("") : `<li style="display:block;color:var(--muted)">Nobody marked ${esc(PLAN[filter]||"")} yet.</li>`;
+}
+
+/* ---------- floor map ---------- */
+/* your number for an author: the lowest one you still hold, with its live status */
+function myBand(id){
+  const done = store.get("lp-done", {}), a = S.authors[id];
+  const list = store.get("lp-mine", []).map(k => ({k, p:S.passes[k]})).filter(x => x.p && x.p.authorId===id)
+    .map(x => ({...x, st: passStatus(x.p, a, done[x.k])})).sort((x,y) => (x.st.k==="done") - (y.st.k==="done") || x.p.number - y.p.number);
+  return list[0] || null;
+}
+function renderMap(){
+  const plan = getPlans();
+  let held = 0, ready = 0;
+  const booths = sortedIds().filter(id=>LAYOUT[id]).map(id => {
+    const a = S.authors[id], L = LAYOUT[id], pl = plan[id], band = myBand(id);
+    if (band && band.st.k !== "done"){ held++; if (band.st.k==="go" || band.st.k==="open") ready++; }
+    // Two separate signals: the box's border/fill is YOUR PLAN; the pill inside is YOUR NUMBER. A number never changes the plan.
+    const bk = band ? (band.st.k==="open" ? "go" : band.st.k) : "";
+    const cls = (pl && pl.pre ? " po" : "") + (pl && pl.v ? " p-" + pl.v : "") + (bk==="go" ? " ready" : "");
+    const tag = band ? `<em class="bp bp-${bk}">${bk==="done"?"✓ ":""}#${band.p.number}</em>` : `<small>${L.b}</small>`;
+    return `<button class="booth${cls}${selBooth===id?" sel":""}" data-booth="${id}" style="left:${L.x}%;top:${L.y}%;width:${L.w}%;height:${L.h}%" aria-label="${esc(a.name)}, table ${L.b}${band?", your number "+band.p.number+", "+band.st.pill:""}">${band?"":`<i class="${a.status}"></i>`}<b>${esc(shortName(a.name))}</b>${tag}</button>`;
+  }).join("");
+  $("floor").innerHTML = booths +
+    `<div class="landmark" style="left:2%;top:84%;width:22%;height:12%">Line board</div>` +
+    `<div class="landmark" style="left:38%;top:88%;width:24%;height:9%">Entrance</div>`;
+  $("mapSum").innerHTML = held ? `You're holding <b>${held}</b> number${held===1?"":"s"}${ready?` · <b class="go">${ready} ready now</b>`:""}` : "Tap a table to get a number";
+
+  const id = selBooth && S.authors[selBooth] ? selBooth : null;
+  if (document.activeElement && document.activeElement.id === "mapName") return;   // don't wipe a name mid-typing
+  if (!id){ $("sheet").innerHTML = `<h2>Tap a table</h2><p class="hint">Get a number right here and it shows on that table. It turns green when you can line up, so you can just watch the map.</p>`; return; }
+  const a = S.authors[id], L = LAYOUT[id], band = myBand(id);
+  const getNum = a.status==="open" ? `<p class="hint">No number needed right now. Walk up.</p>` : `
+    <div class="inline">
+      <div class="field"><label for="mapName">Your name</label><input id="mapName" autocomplete="given-name" placeholder="Janelle S." value="${esc(store.get("lp-name",""))}"></div>
+      <button class="btn" data-mapjoin="${id}">Get my number</button>
+    </div>`;
+  $("sheet").innerHTML = `
+    <span class="hint">Table ${L.b}</span>
+    <h3>${esc(a.name)}</h3>
+    <div class="inline" style="align-items:center"><span class="mini ${a.status}">${lineLabel(a)}</span>
+      <span class="hint">${a.status==="bands"?"Numbers "+a.from+"–"+a.to+" can line up now":a.status==="open"?"Walk up, no number needed":"Author on break"}</span></div>
+    ${band ? `<div class="myband band-${band.st.k}"><span class="n">#${band.p.number}</span><span><b>${esc(band.st.pill)}</b><br>${esc(band.st.sub)}</span></div>
+      <button class="btn ghost" data-mapshow="${band.k}">Show at line</button>` : getNum}
+    ${planSeg(id, plan[id])}`;
+}
+async function mapJoin(id){
+  const input = $("mapName"), name = (input ? input.value : store.get("lp-name","")).trim();
+  if (!name){ toast("Add your name so the table can find you.", true); if (input) input.focus(); return; }
+  store.set("lp-name", name);
+  const btn = document.querySelector(`[data-mapjoin="${id}"]`); if (btn) btn.disabled = true;
+  try{
+    const pid = await addPass(id, name);
+    const mine = store.get("lp-mine", []); mine.unshift(pid); store.set("lp-mine", mine);
+    if (input) input.blur();
+    render(); toast(`You're #${S.passes[pid].number} for ${S.authors[id].name}. It's on the map.`);
+  }catch(e){ toast("Couldn't get a number just now. Try again in a moment.", true); if (btn) btn.disabled = false; }
+}
+function setPlan(id, k){
+  const plan = getPlans(), pl = {...(plan[id] || {})};
+  if (k === "preorder") pl.pre = !pl.pre; else pl.v = pl.v === k ? undefined : k;
+  if (!pl.pre) delete pl.pre; if (!pl.v) delete pl.v;
+  if (Object.keys(pl).length) plan[id] = pl; else delete plan[id];
+  store.set("lp-plan", plan); render();
+}
+function findOnMap(id){ selBooth = id; show("map"); render(); }
+
+/* ---------- one-screen board fit ---------- */
+function fitBoard(){
+  const b = $("board");
+  if (view !== "board"){ b.style.removeProperty("--bh"); return; }
+  const n = Math.max(1, Object.keys(S.authors).length), w = b.clientWidth || window.innerWidth;
+  const cols = w >= 900 ? 3 : 2, rows = Math.ceil(n / cols);
+  const pad = parseFloat(getComputedStyle(document.documentElement).paddingBottom) || 0;
+  const avail = Math.max(rows * 22, document.documentElement.clientHeight - b.getBoundingClientRect().top - pad - 10);
+  const rowh = avail / rows, colw = (w - (cols - 1) * Math.min(28, Math.max(10, w * .02))) / cols;
+  const fs = Math.max(11, Math.min(rowh * .5, colw * .072, 48));
+  b.style.setProperty("--cols", cols); b.style.setProperty("--rows", rows);
+  b.style.setProperty("--bh", avail + "px"); b.style.setProperty("--fs", fs.toFixed(1) + "px");
+}
+window.addEventListener("resize", fitBoard);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitBoard);
+$("proj").onclick = () => { document.body.classList.add("proj"); fitBoard(); toast("Projector view. Tap the title to bring the tabs back."); };
+document.querySelector(".marquee h1").onclick = () => { document.body.classList.remove("proj"); fitBoard(); };
+
+/* ---------- views ---------- */
+function show(v){
+  view = v;
+  document.body.classList.toggle("boardmode", v === "board");
+  if (v !== "board") document.body.classList.remove("proj");
+  requestAnimationFrame(fitBoard);
+  ["board","table","me","map"].forEach(k => { $("v-"+k).hidden = k!==v; $("t-"+k).setAttribute("aria-selected", String(k===v)); });
+  try{ history.replaceState(null,"","#"+v); }catch(e){}
+  store.set("lp-view", v);
+  resync();
+}
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => show(b.dataset.v));
+
+/* table lock */
+$("unlock").onclick = () => {
+  if ($("lockPin").value.trim() !== DEMO_PIN){ $("lockErr").hidden=false; return; }
+  $("lockErr").hidden=true; deskAuthor = $("lockAuthor").value; store.set("lp-desk", deskAuthor);
+  $("lock").hidden=true; $("desk").hidden=false; render();
+};
+$("switchAuthor").onclick = () => { deskAuthor=null; store.set("lp-desk", null); $("desk").hidden=true; $("lock").hidden=false; $("lockPin").value=""; };
+document.querySelectorAll(".seg button").forEach(b => b.onclick = () => {
+  const a = S.authors[deskAuthor]; if(!a) return;
+  const patch = {status:b.dataset.s};
+  if (b.dataset.s==="bands" && !a.to){ patch.from=1; patch.to=Math.min(20, a.issued||20) || 20; }
+  patchAuthor(deskAuthor, patch);
+});
+/* range: big bump buttons + one-step undo */
+let undoState = null;
+document.querySelectorAll("[data-bump]").forEach(b => b.onclick = () => {
+  const a = S.authors[deskAuthor]; if(!a) return;
+  undoState = {id:deskAuthor, from:a.from, to:a.to};
+  patchAuthor(deskAuthor, {from:a.from||1, to:(a.to||0) + +b.dataset.bump});
+});
+$("undo").onclick = () => { if(!undoState) return; const u=undoState; undoState=null; patchAuthor(u.id, {from:u.from, to:u.to}); };
+
+/* check-in number pad */
+let padVal = "";
+const fmtTime = t => new Date(t).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+function renderPad(){
+  const a = S.authors[deskAuthor]; if (!a) return;
+  const r = $("padRead"), out = $("padResult");
+  r.textContent = padVal || "Type their number"; r.classList.toggle("empty", !padVal);
+  if (!padVal){ out.hidden = true; return; }
+  const n = +padVal, used = (a.used||{})[n];
+  const pass = Object.values(S.passes).find(p => p.authorId===deskAuthor && p.number===n);
+  const who = pass ? esc(pass.name) : "No name on file";
+  let cls = "ok", html = "";
+  if (!n || n > (a.issued||0)) { cls="bad"; html = `<b>#${n} hasn't been handed out</b><span>Ask them to show their number again.</span>`; }
+  else if (used) { cls="bad"; html = `<b>#${n} already used at ${fmtTime(used)}</b><span>${who}</span>`; }
+  else if (a.status==="break") { cls="warn"; html = `<b>#${n} · ${who}</b><span>You're on break. Switch back to Range or Open first.</span>`; }
+  else if (a.status==="bands" && n > a.to) { cls="warn"; html = `<b>#${n} isn't up yet</b><span>You're calling up to ${a.to}. ${who}</span>`; }
+  else html = `<b>#${n} · ${who}</b><span>${a.status==="open"?"Line is open.":"In range ✓"}</span><button class="checkin" id="doCheck">Check in #${n}</button>`;
+  out.className = "padresult " + cls; out.innerHTML = html; out.hidden = false;
+}
+document.querySelectorAll("[data-k]").forEach(b => b.onclick = () => {
+  const k = b.dataset.k;
+  if (k==="clr") padVal = ""; else if (k==="del") padVal = padVal.slice(0,-1); else if (padVal.length < 4) padVal = (padVal + k).replace(/^0+/,"");
+  renderPad();
+});
+$("padResult").addEventListener("click", e => {
+  if (!e.target.closest("#doCheck")) return;
+  const a = S.authors[deskAuthor], n = +padVal; if (!a || !n) return;
+  patchAuthor(deskAuthor, {used: {[n]: Date.now()}});
+  padVal = ""; renderPad(); toast(`#${n} checked in. Crossed off.`);
+});
+
+/* give a number to someone without a phone */
+$("give").onclick = async () => {
+  const a = S.authors[deskAuthor]; if (!a) return;
+  $("give").disabled = true;
+  try{
+    const id = await addPass(deskAuthor, "No phone · given at table");
+    const p = S.passes[id];
+    $("oA").textContent = a.name; $("oN").textContent = "#" + p.number;
+    $("oName").textContent = "Write this on their card";
+    $("oR").textContent = a.status==="bands" ? `They can line up when the board reaches ${p.number}. Now calling up to ${a.to}.` : "";
+    $("overlay").hidden = false;
+  }catch(e){ toast("Couldn't hand out a number just now. Try again.", true); }
+  $("give").disabled = false;
+};
+
+/* attendee */
+$("join").onclick = async () => {
+  const name = $("joinName").value.trim(), authorId = $("joinAuthor").value;
+  if (!name){ $("joinErr").textContent="Add your name so the table can find you on their list."; $("joinErr").hidden=false; return; }
+  $("joinErr").hidden=true; $("join").disabled=true; store.set("lp-name", name);
+  try{
+    const id = await addPass(authorId, name);
+    const mine = store.get("lp-mine", []); mine.unshift(id); store.set("lp-mine", mine);
+    render();
+    const p = S.passes[id]; toast(`You're #${p.number} for ${S.authors[authorId].name}.`);
+  }catch(e){ $("joinErr").textContent="Couldn't get a number just now. Try again in a moment."; $("joinErr").hidden=false; }
+  $("join").disabled=false;
+};
+$("passes").onclick = e => {
+  const s = e.target.closest("[data-show]"), d = e.target.closest("[data-done]");
+  if (d){ const done = store.get("lp-done", {}); const k = d.dataset.done; done[k] = !done[k]; store.set("lp-done", done); render(); }
+  if (s){ const p=S.passes[s.dataset.show], a=S.authors[p.authorId], st=passStatus(p,a,false);
+    $("oA").textContent=a.name; $("oN").textContent="#"+p.number; $("oName").textContent=p.name; $("oR").textContent=st.sub; $("overlay").hidden=false; }
+};
+$("oClose").onclick = () => $("overlay").hidden = true;
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-plan],[data-filter],[data-find],[data-booth],[data-getnum],[data-goto],[data-mapjoin],[data-mapshow]"); if (!t) return;
+  if (t.dataset.mapjoin){ mapJoin(t.dataset.mapjoin); return; }
+  if (t.dataset.mapshow){ const p=S.passes[t.dataset.mapshow], a=S.authors[p.authorId], st=passStatus(p,a,false);
+    $("oA").textContent=a.name; $("oN").textContent="#"+p.number; $("oName").textContent=p.name; $("oR").textContent=st.sub; $("overlay").hidden=false; return; }
+  if (t.dataset.plan) setPlan(t.dataset.a, t.dataset.plan);
+  else if (t.dataset.filter){ filter = t.dataset.filter; renderAuthors(); }
+  else if (t.dataset.find) findOnMap(t.dataset.find);
+  else if (t.dataset.booth){ selBooth = selBooth===t.dataset.booth ? null : t.dataset.booth; renderMap(); }
+  else if (t.dataset.getnum){ $("joinAuthor").value = t.dataset.getnum; show("me"); $("joinName").focus(); window.scrollTo({top:0}); }
+  else if (t.dataset.goto) show(t.dataset.goto);
+});
+
+let tt; function toast(msg, bad){ const t=$("toast"); t.textContent=msg; t.style.background = bad?"#ff8fa3":"var(--go)"; t.hidden=false; clearTimeout(tt); tt=setTimeout(()=>t.hidden=true, 4200); }
+
+/* ---------- how each screen stays current ----------
+   Board and an unlocked table: live. Readers (My Bands, Map, Get a number): one look every 20 s while the screen is on.
+   Nothing runs while the phone is locked or the page is in the background. */
+let unsubs = [], pollT = null, curKey = null;
+function stopSync(){ unsubs.forEach(u => { try{ u(); }catch(e){} }); unsubs = []; clearInterval(pollT); pollT = null; }
+function syncKey(){
+  if (document.hidden) return "off";
+  if (view === "board") return "board";
+  if (view === "table" && deskAuthor && !$("desk").hidden) return "desk:" + deskAuthor;
+  return "poll";
+}
+function applyAuthors(snap){ const n = {}; snap.docs.forEach(d => n[d.id] = {...d.data()}); S.authors = n; render(); }
+async function pollOnce(){
+  try{
+    applyAuthors(await db.collection("authors").get());
+    const mine = store.get("lp-mine", []).slice(0, 40);
+    const docs = await Promise.all(mine.map(id => db.doc("passes/" + id).get().catch(() => null)));
+    docs.forEach((d, i) => { if (d && d.exists) S.passes[mine[i]] = {...d.data()}; });
+    render();
+  }catch(e){}
+}
+function resync(){
+  if (!S.live) return;
+  const k = syncKey(); if (k === curKey) return;
+  curKey = k; stopSync();
+  if (k === "off") return;
+  if (k === "board"){ unsubs.push(db.collection("authors").onSnapshot(applyAuthors, () => {})); return; }
+  if (k.startsWith("desk:")){
+    const id = k.slice(5);
+    unsubs.push(db.doc("authors/" + id).onSnapshot(s => { if (s.exists){ S.authors[id] = {...s.data()}; render(); } }, () => {}));
+    unsubs.push(db.collection("passes").where("authorId", "==", id).onSnapshot(s => { s.docs.forEach(d => S.passes[d.id] = {...d.data()}); render(); }, () => {}));
+    return;
+  }
+  pollOnce(); pollT = setInterval(pollOnce, 20000);
+}
+document.addEventListener("visibilitychange", () => { curKey = null; resync(); });
+$("unlock").addEventListener("click", resync);
+$("switchAuthor").addEventListener("click", resync);
+
+document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target.id === "mapName"){ const b = document.querySelector("[data-mapjoin]"); if (b) mapJoin(b.dataset.mapjoin); } });
+
+/* ---------- boot ---------- */
+loadLocal();
+$("joinName").value = store.get("lp-name", "");
+const startView = (location.hash||"").slice(1) || store.get("lp-view","board");
+show(["board","table","me","map"].includes(startView) ? startView : "board");
+const savedDesk = store.get("lp-desk", null);
+if (savedDesk && S.authors[savedDesk]){ deskAuthor=savedDesk; $("lock").hidden=true; $("desk").hidden=false; }
+render();
+setInterval(()=>{ if(view==="board") $("stamp").textContent = "Updated " + new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit", second:"2-digit"}); }, 15000);
+
+/* live sync through the shared store, when this viewer has it */
+(async () => {
+  try{
+    const use = window.claude && window.claude.use; if (!use) return;
+    db = await window.claude.use("db"); if (!db) return;
+    // Someone viewing a shared link who can't change the shared data gets the full demo on their own phone instead.
+    const user = await window.claude.use("user");
+    const canWrite = user ? await user.can("data.write") : null;
+    if (canWrite === false) { db = null; return; }
+    const first = await db.collection("authors").get();
+    if (first.empty) { db = null; return; }   // nothing loaded for this event: stay in demo mode
+    S.live = true; S.authors = {}; S.passes = {};
+    first.docs.forEach(d => S.authors[d.id] = {...d.data()});
+    $("mode").classList.add("live"); $("modeText").textContent = "Live · synced across devices";
+    if (deskAuthor && !S.authors[deskAuthor]) $("switchAuthor").click();
+    render();
+    curKey = null; resync();
+  }catch(e){ db=null; S.live=false; stopSync(); }
+})();
+</script>
+</body>
+</html>
