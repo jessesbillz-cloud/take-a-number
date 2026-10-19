@@ -104,7 +104,10 @@ body.proj .top{display:none}
 .bumps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .bumps button{border:0;border-radius:14px;padding:22px 4px;font-family:var(--display);font-weight:900;font-size:38px;line-height:1;background:var(--go);color:#062414}
 .bumps button:active{transform:scale(.97)}
-.undo{align-self:center;border:1px solid var(--line);background:none;border-radius:999px;padding:8px 18px;font-weight:600;color:var(--muted)}
+.undo{border:1px solid var(--line);background:none;border-radius:999px;padding:10px 20px;font-weight:700;font-size:16px;color:var(--muted)}
+.minor{display:flex;justify-content:center;gap:10px}
+.linecount{margin:0;text-align:center;font-size:17px;color:var(--muted)}
+.linecount b{color:var(--fg);font-variant-numeric:tabular-nums}
 .padread{font-family:var(--display);font-weight:900;font-size:56px;line-height:1;text-align:center;padding:10px;border-radius:12px;background:var(--ink);border:1px solid var(--line);font-variant-numeric:tabular-nums;min-height:78px;display:flex;align-items:center;justify-content:center}
 .padread.empty{font-family:var(--body);font-weight:600;font-size:17px;color:var(--muted)}
 .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -271,8 +274,9 @@ body.proj .top{display:none}
         <div id="rangeBox" class="rangebox">
           <p class="cap">Now calling</p>
           <div class="range"><span id="rFrom">1</span><small>to</small><span id="rTo">100</span></div>
+          <p class="linecount" id="lineCount"></p>
           <div class="bumps"><button data-bump="10">+10</button><button data-bump="20">+20</button><button data-bump="30">+30</button></div>
-          <button class="undo" id="undo" hidden>Undo</button>
+          <div class="minor"><button class="undo" data-bump="-10">−10</button><button class="undo" id="undo" hidden>Undo</button></div>
         </div>
         <p class="cap" id="statusHint"></p>
       </div>
@@ -484,6 +488,10 @@ function render(){
     $("statusHint").textContent = a.status==="bands" ? `${a.issued||0} numbers handed out` : a.status==="open" ? "Anyone can walk up" : "Board shows BREAK";
     $("undo").hidden = !undoState || undoState.id!==deskAuthor;
     $("sChecked").textContent = Object.keys(a.used||{}).length;
+    // How many called numbers have come through, and how many are still out walking around.
+    const called = Math.max(0, Math.min(a.to||0, a.issued||0) - (a.from||1) + 1);
+    const through = Object.keys(a.used||{}).filter(n => +n >= (a.from||1) && +n <= (a.to||0)).length;
+    $("lineCount").innerHTML = `<b>${through}</b> checked in · <b>${Math.max(0, called - through)}</b> called, not here yet`;
     renderPad();
   }
 
@@ -635,15 +643,17 @@ $("switchAuthor").onclick = () => { deskAuthor=null; store.set("lp-desk", null);
 document.querySelectorAll(".seg button").forEach(b => b.onclick = () => {
   const a = S.authors[deskAuthor]; if(!a) return;
   const patch = {status:b.dataset.s};
-  if (b.dataset.s==="bands" && !a.to){ patch.from=1; patch.to=Math.min(20, a.issued||20) || 20; }
+  if (b.dataset.s==="bands" && !a.to){ patch.from=1; patch.to=50; }   // a new line starts by calling 1–50
   patchAuthor(deskAuthor, patch);
 });
 /* range: big bump buttons + one-step undo */
 let undoState = null;
 document.querySelectorAll("[data-bump]").forEach(b => b.onclick = () => {
   const a = S.authors[deskAuthor]; if(!a) return;
+  const from = a.from||1, to = Math.max(from, (a.to||0) + +b.dataset.bump);
+  if (to === a.to) return;
   undoState = {id:deskAuthor, from:a.from, to:a.to};
-  patchAuthor(deskAuthor, {from:a.from||1, to:(a.to||0) + +b.dataset.bump});
+  patchAuthor(deskAuthor, {from, to});
 });
 $("undo").onclick = () => { if(!undoState) return; const u=undoState; undoState=null; patchAuthor(u.id, {from:u.from, to:u.to}); };
 
